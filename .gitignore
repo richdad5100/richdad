@@ -1,2 +1,138 @@
-node_modules
-.next
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Coupang Link Shortener - Simple</title>
+<style>
+  body{font-family:system-ui,-apple-system;display:flex;min-height:100vh;align-items:flex-start;justify-content:center;background:#0f1724;color:#e6eef8;padding:36px}
+  .wrap{width:100%;max-width:920px;background:#071020;border-radius:8px;padding:20px;box-shadow:0 6px 24px rgba(0,0,0,0.6)}
+  h1{margin:0 0 12px;font-size:20px}
+  label{display:block;margin-top:10px;font-size:13px;opacity:0.9}
+  input[type=text]{width:100%;padding:10px;border-radius:6px;border:1px solid #223044;background:#071722;color:#eaf5ff}
+  button{margin-top:10px;padding:10px 12px;border-radius:6px;border:none;background:#0ea5a4;color:#042022;cursor:pointer}
+  .list{margin-top:18px}
+  .card{background:#071827;border:1px solid #132734;padding:12px;border-radius:6px;margin-bottom:10px;display:flex;gap:12px;align-items:center}
+  .meta{flex:1}
+  .code{font-family:monospace;background:#02151a;padding:6px;border-radius:4px}
+  small{color:#9fb3c0}
+  .btn-copy{padding:6px 8px;border-radius:6px;background:#0ea5a4;color:#012;cursor:pointer;border:none}
+  .muted{color:#8fa3ad;font-size:13px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>쿠팡 링크 등록 (간단형)</h1>
+    <div class="muted">원본 쿠팡 URL을 넣고, (선택) 쿠팡파트너스 파트너URL을 추가하면 단축 링크를 생성합니다. (데모: 로컬 저장)</div>
+
+    <label>원본 쿠팡 링크</label>
+    <input id="original" type="text" placeholder="https://www.coupang.com/vp/products/1234567890" />
+
+    <label>파트너스 링크 (선택)</label>
+    <input id="partner" type="text" placeholder="https://link.coupang.com/a/xxxxx" />
+
+    <label>표시 제목 (선택)</label>
+    <input id="title" type="text" placeholder="상품명 자동 불러오기 불가시 수동 기입" />
+
+    <button id="addBtn">단축 링크 생성</button>
+
+    <div class="list" id="list"></div>
+
+    <div style="margin-top:14px">
+      <button id="exportBtn" class="muted">저장된 링크 JSON으로 내보내기</button>
+      <small style="display:block;margin-top:6px">※ 이 간단 데모는 서버가 없으므로 브라우저 로컬에 저장됩니다. 나중에 DB 연결 부분으로 확장 가능.</small>
+    </div>
+  </div>
+
+<script>
+const original = document.getElementById('original')
+const partner = document.getElementById('partner')
+const titleIn = document.getElementById('title')
+const addBtn = document.getElementById('addBtn')
+const list = document.getElementById('list')
+const exportBtn = document.getElementById('exportBtn')
+
+function randCode(n=6){
+  const s = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let r=''
+  for(let i=0;i<n;i++) r+=s[Math.floor(Math.random()*s.length)]
+  return r
+}
+
+function load(){
+  const data = JSON.parse(localStorage.getItem('coupang_links')||'[]')
+  render(data)
+}
+
+function save(arr){
+  localStorage.setItem('coupang_links', JSON.stringify(arr))
+  render(arr)
+}
+
+function render(arr){
+  list.innerHTML = ''
+  if(!arr.length){ list.innerHTML = '<p class="muted">등록된 링크가 없습니다.</p>'; return }
+  arr.slice().reverse().forEach(item=>{
+    const card = document.createElement('div'); card.className='card'
+    const meta = document.createElement('div'); meta.className='meta'
+    meta.innerHTML = `<div style="font-weight:600">${item.title||'(제목 없음)'}</div><small class="muted">${item.original_url}</small>`
+    const right = document.createElement('div'); right.style.textAlign='right'
+    const sc = document.createElement('div'); sc.className='code'; sc.textContent = location.origin + location.pathname + '?p=' + item.short_code
+    const btn = document.createElement('button'); btn.className='btn-copy'; btn.textContent='복사'; btn.onclick = ()=>{navigator.clipboard.writeText(sc.textContent); btn.textContent='복사됨'; setTimeout(()=>btn.textContent='복사',1200)}
+    right.appendChild(sc); right.appendChild(document.createElement('br')); right.appendChild(btn)
+    card.appendChild(meta); card.appendChild(right)
+    list.appendChild(card)
+  })
+}
+
+addBtn.onclick = ()=>{
+  const o = original.value.trim()
+  if(!o){ alert('원본 링크를 입력하세요'); original.focus(); return }
+  const p = partner.value.trim()
+  const t = titleIn.value.trim()
+  const code = randCode(6)
+  const arr = JSON.parse(localStorage.getItem('coupang_links')||'[]')
+  arr.push({
+    id: Date.now(),
+    original_url: o,
+    partner_url: p || '',
+    title: t || '',
+    short_code: code,
+    created_at: new Date().toISOString()
+  })
+  save(arr)
+  original.value = ''; partner.value = ''; titleIn.value = ''
+}
+
+exportBtn.onclick = ()=>{
+  const data = localStorage.getItem('coupang_links') || '[]'
+  const blob = new Blob([data], {type:'application/json'})
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = 'links.json'; a.click()
+  URL.revokeObjectURL(url)
+}
+
+/* simple redirect handler if ?p=code in URL */
+(function redirectIf(){
+  const params = new URLSearchParams(location.search)
+  const p = params.get('p')
+  if(p){
+    const arr = JSON.parse(localStorage.getItem('coupang_links')||'[]')
+    const found = arr.find(x=>x.short_code===p)
+    if(found){
+      // prefer partner_url if provided, else original
+      const dest = found.partner_url || found.original_url
+      // show a simple page then redirect
+      document.body.innerHTML = '<div style="font-family:system-ui;padding:24px;color:#e6eef8;background:#071827;height:100vh;display:flex;align-items:center;justify-content:center"><div style="max-width:720px;text-align:center"><h2>리디렉트 중...</h2><p class="muted">곧 이동합니다. 이동하지 않으면 아래 링크 클릭</p><p style="margin-top:12px"><a id="go" href="'+dest+'" style="color:#0ea5a4">'+dest+'</a></p></div></div>'
+      setTimeout(()=>{ location.href = dest }, 800)
+    } else {
+      // not found
+      document.body.innerHTML = '<div style="font-family:system-ui;padding:24px;color:#e6eef8;background:#071827;height:100vh;display:flex;align-items:center;justify-content:center"><div style="max-width:720px;text-align:center"><h2>해당 코드 없음</h2><p class="muted">등록된 코드가 없거나 로컬 데이터가 초기화되었을 수 있습니다.</p></div></div>'
+    }
+  }
+})()
+
+load()
+</script>
+</body>
+</html>
